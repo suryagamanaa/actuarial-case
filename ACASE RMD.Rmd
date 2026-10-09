@@ -1,0 +1,415 @@
+```{r}
+# install.packages("readxl")
+# install.packages("fitdistrplus")
+# install.packages("mixtools")
+# install.packages("janitor")
+
+library(readxl)
+library(fitdistrplus)
+library(mixtools)
+library(janitor)
+library(readxl)
+
+# ==== 1. Baca file Excel ====
+file_path <- ("C:/Users/Surya/ACASE/Raw Data ACS.xlsx")
+
+# Kalau sheet ada lebih dari satu, bisa tentukan sheet dengan sheet="nama_sheet"
+df <- read_excel(file_path, sheet = "tolong")
+ 
+# ==== 2. Cek nama kolom yang terbaca ====
+colnames(df)
+
+# ==== 3. Ambil variabel yang dibutuhkan ====
+# (pastikan nama kolom sesuai hasil colnames(df))
+# Ambil variabel dengan backtick
+
+curah <- as.numeric(df$`Rataan Curah Hujan`)
+gagal_panen <- as.numeric(df$`Rataan Gagal Panen`)
+ln_gagal <- as.numeric(df$`S Ln Gagal`)
+produktivitas <- as.numeric(df$`Rataan Produktivitas Lahan`)
+
+
+# Cek struktur
+str(curah)
+str(ln_gagal)
+
+# Plot
+par(mfrow=c(1,2))
+
+hist(curah, breaks=30, main="Curah Hujan", col="#2b74d6", freq=FALSE)
+lines(density(curah, na.rm=TRUE), col="red", lwd=2)
+
+hist(gagal_panen, breaks=30, main="Tingkat Gagal Panen", col="#e5e6bf", freq=FALSE)
+
+hist(ln_gagal, breaks=30, main="Tingkat Gagal Panen (transformasi log-natural)", col="#e5e6bf", freq=FALSE)
+lines(density(ln_gagal, na.rm=TRUE), col="red", lwd=2)
+
+hist(produktivitas, breaks=30, main="Produktivitias", col="#4d7c30", freq=FALSE)
+lines(density(produktivitas, na.rm=TRUE), col="red", lwd=2)
+
+```
+
+
+
+
+```{r}
+
+shapiro.test(gagal_panen)  
+ks.test(scale(gagal_panen), "pnorm")
+
+shapiro.test(ln_gagal)  
+ks.test(scale(ln_gagal), "pnorm")
+
+shapiro.test(curah)  
+ks.test(scale(curah), "pnorm")
+
+shapiro.test(produktivitas)  
+ks.test(scale(produktivitas), "pnorm")
+
+# Korelasi Spearman
+cor.test(curah, gagal_panen, method = "spearman")
+cor.test(curah, ln_gagal, method = "spearman")
+cor.test(curah, produktivitas, method = "spearman")
+cor.test(produktivitas, ln_gagal, method = "spearman")
+cor.test(produktivitas, gagal_panen, method = "spearman")
+cor.test(curah, produktivitas, method = "spearman")
+
+```
+
+```{r}
+# ==== Library ====
+library(readxl)
+library(mixtools)
+library(ggplot2)
+
+# ==== 1. Baca Data ====
+file_path <- "C:/Users/Surya/ACASE/Raw Data ACS.xlsx"
+df <- read_excel(file_path, sheet = "yallah")
+
+# ==== 2. Ambil variabel & Bersihkan ====
+curah <- as.numeric(df$`Rataan Curah Hujan`)
+produktivitas <- as.numeric(df$`Rataan Produktivitas Lahan`)
+
+curah_clean <- curah[!is.na(curah) & is.finite(curah)]
+produktivitas_clean <- produktivitas[!is.na(produktivitas) & is.finite(produktivitas)]
+
+# ==== 3. Fit Gaussian Mixture (Curah) ====
+set.seed(123)
+fit_curah <- normalmixEM(curah_clean, k = 2, maxit = 1000)
+summary(fit_curah)
+
+# Plot distribusi Curah
+df_curah <- data.frame(x = curah_clean)
+ggplot(df_curah, aes(x = x)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "skyblue", color = "black", alpha = 0.6) +
+  stat_function(fun = function(x) fit_curah$lambda[1] * dnorm(x, mean = fit_curah$mu[1], sd = fit_curah$sigma[1]),
+                color = "red", size = 1) +
+  stat_function(fun = function(x) fit_curah$lambda[2] * dnorm(x, mean = fit_curah$mu[2], sd = fit_curah$sigma[2]),
+                color = "blue", size = 1) +
+  stat_function(fun = function(x)
+    fit_curah$lambda[1] * dnorm(x, mean = fit_curah$mu[1], sd = fit_curah$sigma[1]) +
+    fit_curah$lambda[2] * dnorm(x, mean = fit_curah$mu[2], sd = fit_curah$sigma[2]),
+    color = "darkgreen", size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Gaussian Mixture (2 Komponen) - Curah Hujan",
+       x = "Curah Hujan", y = "Density")
+
+# ==== 4. Fit Gaussian Mixture (Produktivitas) ====
+set.seed(123)
+fit_prod <- normalmixEM(produktivitas_clean, k = 2, maxit = 1000)
+summary(fit_prod)
+
+# Plot distribusi Produktivitas
+df_prod <- data.frame(x = produktivitas_clean)
+ggplot(df_prod, aes(x = x)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "lightgreen", color = "black", alpha = 0.6) +
+  stat_function(fun = function(x) fit_prod$lambda[1] * dnorm(x, mean = fit_prod$mu[1], sd = fit_prod$sigma[1]),
+                color = "red", size = 1) +
+  stat_function(fun = function(x) fit_prod$lambda[2] * dnorm(x, mean = fit_prod$mu[2], sd = fit_prod$sigma[2]),
+                color = "blue", size = 1) +
+  stat_function(fun = function(x)
+    fit_prod$lambda[1] * dnorm(x, mean = fit_prod$mu[1], sd = fit_prod$sigma[1]) +
+    fit_prod$lambda[2] * dnorm(x, mean = fit_prod$mu[2], sd = fit_prod$sigma[2]),
+    color = "darkgreen", size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Gaussian Mixture (2 Komponen) - Produktivitas",
+       x = "Produktivitas Lahan", y = "Density")
+
+
+```
+
+
+```{r}
+
+
+```
+
+```{r}
+# Bersihkan data curah
+curah_clean <- curah[!is.na(curah) & is.finite(curah)]
+
+# --- Model normal tunggal (k=1) ---
+mu1 <- mean(curah_clean)
+sd1 <- sd(curah_clean)
+loglik1 <- sum(dnorm(curah_clean, mean=mu1, sd=sd1, log=TRUE))
+
+n <- length(curah_clean)
+k1_params <- 2
+AIC1 <- -2*loglik1 + 2*k1_params
+BIC1 <- -2*loglik1 + log(n)*k1_params
+
+# --- Model mixture normal (k=2) ---
+set.seed(123)
+fit2 <- normalmixEM(curah_clean, k=2, maxit=1000)
+
+k2_params <- (3*2 - 1)
+loglik2 <- fit2$loglik
+AIC2 <- -2*loglik2 + 2*k2_params
+BIC2 <- -2*loglik2 + log(n)*k2_params
+
+# --- Hasil perbandingan ---
+results <- data.frame(
+  Model = c("Normal tunggal (k=1)", "Gaussian Mixture (k=2)"),
+  LogLik = c(loglik1, loglik2),
+  AIC = c(AIC1, AIC2),
+  BIC = c(BIC1, BIC2)
+)
+
+print(results)
+
+# --- Plot perbandingan ---
+hist(curah_clean, breaks=30, freq=FALSE, col="lightblue",
+     main="Histogram Curah Hujan + Fit Distribusi")
+
+# Normal tunggal
+curve(dnorm(x, mean=mu1, sd=sd1), add=TRUE, col="red", lwd=2)
+
+# Mixture k=2
+curve(fit2$lambda[1]*dnorm(x, fit2$mu[1], fit2$sigma[1]) +
+      fit2$lambda[2]*dnorm(x, fit2$mu[2], fit2$sigma[2]),
+      add=TRUE, col="darkgreen", lwd=2, lty=2)
+
+```
+
+```{r}
+# ===========================
+# PRODUKTIVITAS
+# ===========================
+
+# Bersihkan data produktivitas
+produktivitas_clean <- produktivitas[!is.na(produktivitas) & is.finite(produktivitas)]
+
+# --- Model normal tunggal (k=1) ---
+mu_p1 <- mean(produktivitas_clean)
+sd_p1 <- sd(produktivitas_clean)
+loglik_p1 <- sum(dnorm(produktivitas_clean, mean=mu_p1, sd=sd_p1, log=TRUE))
+
+n_p <- length(produktivitas_clean)
+k1_params_p <- 2
+AIC_p1 <- -2*loglik_p1 + 2*k1_params_p
+BIC_p1 <- -2*loglik_p1 + log(n_p)*k1_params_p
+
+# --- Model mixture normal (k=2) ---
+set.seed(123)
+fit2_p <- normalmixEM(produktivitas_clean, k=2, maxit=1000)
+
+k2_params_p <- (3*2 - 1)
+loglik_p2 <- fit2_p$loglik
+AIC_p2 <- -2*loglik_p2 + 2*k2_params_p
+BIC_p2 <- -2*loglik_p2 + log(n_p)*k2_params_p
+
+# --- Hasil perbandingan ---
+results_p <- data.frame(
+  Model = c("Normal tunggal (k=1)", "Gaussian Mixture (k=2)"),
+  LogLik = c(loglik_p1, loglik_p2),
+  AIC = c(AIC_p1, AIC_p2),
+  BIC = c(BIC_p1, BIC_p2)
+)
+
+print(results_p)
+
+# --- Plot perbandingan ---
+hist(produktivitas_clean, breaks=30, freq=FALSE, col="lightgreen",
+     main="Histogram Produktivitas Lahan + Fit Distribusi")
+
+# Normal tunggal
+curve(dnorm(x, mean=mu_p1, sd=sd_p1), add=TRUE, col="red", lwd=2)
+
+# Mixture k=2
+curve(fit2_p$lambda[1]*dnorm(x, fit2_p$mu[1], fit2_p$sigma[1]) +
+      fit2_p$lambda[2]*dnorm(x, fit2_p$mu[2], fit2_p$sigma[2]),
+      add=TRUE, col="darkgreen", lwd=2, lty=2)
+
+```
+
+
+```{r}
+# ===============================
+# Eksplorasi Data Asuransi Tani
+# ===============================
+
+# Load library
+library(readxl)
+library(janitor)
+library(dplyr)
+library(ggplot2)
+
+# ==== 1. Baca file Excel ====
+file_path <- "C:/Users/Surya/ACASE/Raw Data ACS.xlsx"
+df <- read_excel(file_path, sheet = "tolong")
+
+# ==== 2. Bersihkan nama kolom ====
+df <- janitor::clean_names(df)
+
+# Cek kolom yang ada
+colnames(df)
+
+# ==== 3. Ringkasan statistik deskriptif ====
+
+library(ggplot2)
+library(dplyr)
+
+#Pastikan variabel terbaca benar
+df <- df %>%
+  rename(
+    gagal_ln = `s_ln_gagal`,
+    produktivitas = `rataan_produktivitas_lahan`,
+    curah = `rataan_curah_hujan`,
+    cluster = `kelompok_risiko`
+  ) %>%
+  mutate(cluster = factor(cluster))
+
+library(ggplot2)
+library(dplyr)
+
+colnames(df)
+# ==== BOX PLOT dengan sumbu sama ====
+
+
+```
+
+```{r}
+
+
+# Statistik deskriptif per kelompok risiko
+stats_by_cluster <- df %>%
+  group_by(cluster) %>%
+  summarise(
+    mean_gagal = mean(rataan_gagal_panen, na.rm = TRUE),
+    sd_gagal   = sd(rataan_gagal_panen, na.rm = TRUE),
+    mean_prod  = mean(produktivitas, na.rm = TRUE),
+    sd_prod    = sd(produktivitas, na.rm = TRUE),
+    mean_curah = mean(curah, na.rm = TRUE),
+    sd_curah   = sd(curah, na.rm = TRUE),
+    mean_premi = mean(premi, na.rm = TRUE),
+    sd_premi   = sd(premi, na.rm = TRUE),
+    n          = n()
+  )
+
+stats_by_cluster
+
+
+```
+
+```{r}
+ylim_gagal <- c(min(df$gagal_ln, na.rm=TRUE), 2+max(df$gagal_ln, na.rm=TRUE))
+ylim_prod  <- c(min(df$produktivitas, na.rm=TRUE), max(df$produktivitas, na.rm=TRUE))
+ylim_curah <- c(min(df$curah, na.rm=TRUE), max(df$curah, na.rm=TRUE))
+
+# Boxplot gagal panen log
+ggplot(df, aes(x = cluster, y = gagal_ln, fill = cluster)) +
+  geom_boxplot(outlier.color = "red", outlier.size = 2+2) +
+  theme_minimal() +
+  labs(title = "Boxplot Tingkat Gagal Panen per Kelompok Risiko",
+       x = "Kelompok Risiko", y = "S Ln Gagal Panen")
+
+# Boxplot produktivitas
+ggplot(df, aes(x = cluster, y = produktivitas, fill = cluster)) +
+  geom_boxplot(outlier.color = "red", outlier.size = 2) +
+  theme_minimal() +
+  labs(title = "Boxplot Produktivitas per Kelompok Risiko",
+       x = "Kelompok Risiko", y = "Produktivitas")
+
+# Boxplot curah hujan
+ggplot(df, aes(x = cluster, y = curah, fill = cluster)) +
+  geom_boxplot(outlier.color = "red", outlier.size = 2) +
+  theme_minimal() +
+  labs(title = "Boxplot Curah Hujan per Kelompok Risiko",
+       x = "Kelompok Risiko", y = "Curah Hujan")
+```
+
+
+
+```{r}
+# Scatter plot curah vs gagal ln
+ggplot(df, aes(x = curah, y = gagal_ln, color = cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  theme_minimal() +
+  labs(title = "Scatter Plot Curah Hujan vs S Ln Gagal Panen",
+       x = "Curah Hujan", y = "S Ln Gagal Panen")
+
+# Scatter plot produktivitas vs gagal ln
+ggplot(df, aes(x = produktivitas, y = gagal_ln, color = cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  theme_minimal() +
+  labs(title = "Scatter Plot Produktivitas vs S Ln Gagal Panen",
+       x = "Produktivitas", y = "S Ln Gagal Panen")
+
+# Scatter plot produktivitas vs curah
+ggplot(df, aes(x = produktivitas, y = curah, color = cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  theme_minimal() +
+  labs(title = "Scatter Plot Produktivitas vs Curah Hujan",
+       x = "Produktivitas", y = "Curah Hujan")
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Fungsi untuk hitung R^2
+get_r2 <- function(x, y) {
+  mod <- lm(y ~ x)
+  summary(mod)$r.squared
+}
+
+# ==== Scatter plot Curah vs Gagal LN ====
+r2_curah_gagal <- get_r2(df$curah, df$gagal_ln)
+
+ggplot(df, aes(x = curah, y = gagal_ln, color = cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  labs(
+    title = paste0("Scatter Curah Hujan vs Tingkat Gagal Panen (R² = ", round(r2_curah_gagal, 3), ")"),
+    x = "Curah Hujan", y = "S Ln Gagal Panen"
+  )
+
+# ==== Scatter plot Produktivitas vs Gagal LN ====
+r2_prod_gagal <- get_r2(df$produktivitas, df$gagal_ln)
+
+ggplot(df, aes(x = produktivitas, y = gagal_ln, color = cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  labs(
+    title = paste0("Scatter Produktivitas vs Tingkat Gagal Panen (R² = ", round(r2_prod_gagal, 3), ")"),
+    x = "Produktivitas", y = "Tingkat Gagal Panen"
+  )
+
+# ==== Scatter plot Produktivitas vs Curah ====
+r2_prod_curah <- get_r2(df$produktivitas, df$curah)
+
+ggplot(df, aes(x = produktivitas, y = curah, color = cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  labs(
+    title = paste0("Scatter Produktivitas vs Curah Hujan (R² = ", round(r2_prod_curah, 3), ")"),
+    x = "Produktivitas", y = "Curah Hujan"
+  )
+
+```
+
+
